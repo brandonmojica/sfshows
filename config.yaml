@@ -1,0 +1,46 @@
+imessage:
+  # Phone numbers (+1XXXXXXXXXX) or Apple IDs (email) to message individually.
+  # Add more entries to send to multiple people. For a named group chat,
+  # replace this with: group_name: "Your Group Chat Name"
+  recipients:
+    - "+14083343076"
+    # - "+15559876543"
+
+schedule:
+  days_ahead: 14
+
+genres:
+  - label: "Indie/Alternative"
+    tags: ["indie", "alternative", "shoegaze", "dream pop", "indie rock", "indie pop"]
+  - label: "Electronic/Dance"
+    tags: ["electronic", "dance", "techno", "house", "edm", "synth", "ambient", "electro"]
+  - label: "Hip-Hop/R&B"
+    tags: ["hip hop", "hip-hop", "rap", "r&b", "rnb", "soul", "trap", "neo soul"]
+  - label: "Rock/Metal"
+    tags: ["rock", "metal", "punk", "hardcore", "grunge", "post-rock", "hard rock"]
+
+sources:
+  bandsintown: true
+  billgraham: true
+
+scraper:
+  latitude: 37.7749
+  longitude: -122.4194
+  # Only include events where locationText contains one of these strings (case-insensitive).
+  # Add "Oakland, CA" or "Berkeley, CA" etc. to expand to broader Bay Area.
+  cities:
+    - "San Francisco, CA"
+  max_pages: 25               # Safety cap on API pagination (~36 events/page)
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+enrichment:
+  min_tag_count: 1            # Ignore MusicBrainz tags voted fewer than N times
+  request_delay_ms: 1100      # Delay between MusicBrainz calls (enforces 1 req/sec limit)
+  cache_ttl_days: 30          # Re-fetch artist genre cache after N days
+
+database:
+  path: "~/.sfshows/sfshows.db"
+
+notification:
+  max_shows_per_digest: 20    # Truncate digest at N shows
+  include_ticket_url: true
