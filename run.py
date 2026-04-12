@@ -53,28 +53,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--csv",
         metavar="FILE",
-        help="Export scraped shows to a CSV file (e.g. shows.csv)",
+        help="Export all shows from the DB to a CSV file. Skips scraping unless combined with another mode flag.",
     )
     return parser.parse_args()
 
 
-def export_csv(shows: list[ShowRecord], path: str) -> None:
-    """Write a list of ShowRecords to a CSV file at the given path."""
-    fields = ["artist_name", "venue_name", "venue_city", "event_datetime", "genre_label", "ticket_url", "source", "event_id"]
+def export_csv(shows: list[dict], path: str) -> None:
+    """Write all shows (joined with enrichment data) to a CSV file at the given path."""
+    fields = [
+        "artist_name", "venue_name", "venue_city", "event_datetime",
+        "genre_label", "ticket_url", "source", "event_id",
+        "notified", "created_at",
+        "mbid", "artist_type", "country", "area",
+        "begin_date", "end_date", "ended",
+        "rating", "rating_votes",
+        "tags_json", "mb_genres_json", "urls_json",
+    ]
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
-        for show in shows:
-            writer.writerow({
-                "artist_name":   show.artist_name,
-                "venue_name":    show.venue_name,
-                "venue_city":    show.venue_city,
-                "event_datetime": show.event_datetime,
-                "genre_label":   show.genre_label or "",
-                "ticket_url":    show.ticket_url or "",
-                "source":        show.source,
-                "event_id":      show.event_id,
-            })
+        writer.writerows(shows)
     print(f"[csv] Wrote {len(shows)} shows to {path}")
 
 
@@ -136,19 +134,22 @@ async def main() -> None:
     notified_count = 0
     error_msg = None
 
+    # When --csv is the only flag, skip scraping and notification — just dump the DB.
+    csv_only = bool(args.csv) and not (args.notify_only or args.dry_run or args.scrape_only)
+
     try:
-        # Step 1: Scrape (unless --notify-only)
+        # Step 1: Scrape (unless --notify-only or csv_only)
         scraped_shows = []
-        if not args.notify_only:
+        if not args.notify_only and not csv_only:
             scraped_count, new_count, scraped_shows = await run_scrape(cfg, db, save_html=args.save_html)
             print(f"[run] Scraped {scraped_count} events, {new_count} new")
 
-        # Step 1b: CSV export (shows from this scrape only)
+        # Step 1b: CSV export (all shows in DB, joined with enrichment data)
         if args.csv:
-            export_csv(scraped_shows, args.csv)
+            export_csv(db.get_all_shows(), args.csv)
 
-        # Step 2: Notify (unless --scrape-only)
-        if not args.scrape_only:
+        # Step 2: Notify (unless --scrape-only or csv_only)
+        if not args.scrape_only and not csv_only:
             pending = db.get_pending_shows()
             if not pending:
                 print("[run] No pending shows to notify about")

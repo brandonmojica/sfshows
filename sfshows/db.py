@@ -169,6 +169,24 @@ class Database:
         )
         self._conn.commit()
 
+    def get_all_shows(self) -> list[dict]:
+        """Return all shows joined with artist_genres enrichment data, ordered by event date."""
+        rows = self._conn.execute(
+            """
+            SELECT
+                s.event_id, s.source, s.artist_name, s.venue_name, s.venue_city,
+                s.event_datetime, s.ticket_url, s.genre_label, s.notified, s.created_at,
+                ag.mbid, ag.artist_type, ag.country, ag.area,
+                ag.begin_date, ag.end_date, ag.ended,
+                ag.rating, ag.rating_votes,
+                ag.tags_json, ag.mb_genres_json, ag.urls_json
+            FROM shows s
+            LEFT JOIN artist_genres ag ON ag.artist_name = s.artist_name
+            ORDER BY s.event_datetime ASC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_pending_shows(self, source: str = "bandsintown") -> list[ShowRecord]:
         """Return all un-notified shows for the given source, ordered by event date ascending."""
         rows = self._conn.execute(

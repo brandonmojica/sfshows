@@ -16,6 +16,11 @@ from sfshows.scrapers import BaseScraper, RawEvent
 SOURCE = "bandsintown"
 EVENT_URL_PREFIX = "https://www.bandsintown.com/e/"
 
+_INVALID_ARTIST_NAMES: frozenset[str] = frozenset({
+    "Upcoming Concerts",
+    "Unknown",
+})
+
 
 def _extract_event_id(event_url: str) -> str:
     """Extract the numeric event ID from a Bandsintown event URL."""
@@ -78,7 +83,9 @@ def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
         seen_ids.add(event_id)
 
         # Artist name is the text directly inside the <a> tag
-        artist_name = a.get_text(strip=True) or "Unknown"
+        artist_name = a.get_text(strip=True)
+        if not artist_name or artist_name in _INVALID_ARTIST_NAMES:
+            continue
 
         # Event card is 2 levels up from the <a> tag
         card = a.parent.parent
