@@ -149,7 +149,6 @@ async def main() -> None:
             pending = db.get_pending_shows()
             if not pending:
                 print("[run] No pending shows to notify about")
-                db.log_run(scraped_count, new_count, 0, None)
                 return
 
             date_from_dt = datetime.now()

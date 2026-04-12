@@ -13,7 +13,7 @@ from sfshows.db import Database
 from sfshows.enrichment import BaseEnricher
 
 BANDSINTOWN_API = "https://rest.bandsintown.com/artists/{name}?app_id=js_1.0"
-MB_ARTIST_BY_ID = "https://musicbrainz.org/ws/2/artist/{mbid}?inc=tags&fmt=json"
+MB_ARTIST_BY_ID = "https://musicbrainz.org/ws/2/artist/{mbid}?inc=tags+genres+url-rels+ratings&fmt=json"
 MB_ARTIST_SEARCH = "https://musicbrainz.org/ws/2/artist/?query={name}&fmt=json"
 
 MB_HEADERS = {
@@ -110,16 +110,25 @@ class MusicBrainzEnricher(BaseEnricher):
                 except Exception:
                     mbid_map[name] = None
 
-        # Step 3: sequential MusicBrainz tag lookups (1/sec rate limit)
+        # Step 3: sequential MusicBrainz lookups (1/sec rate limit)
         for name in tqdm(misses, desc="Enriching artists", unit="artist"):
             mbid = mbid_map.get(name)
-            if mbid:
-                tags = self._fetch_tags_by_mbid(mbid)
-            else:
-                tags = self._fetch_tags_by_name(name)
-
+            data = self._fetch_artist_data(mbid) if mbid else self._fetch_artist_data_by_name(name)
+            tags = data.get("tags", [])
             genre_label = match_genre(tags, self._config.genres, self._config.min_tag_count)
-            self._db.set_cached_genre(name, mbid, tags, genre_label)
+            self._db.set_cached_genre(
+                name, mbid, tags, genre_label,
+                artist_type=data.get("artist_type"),
+                country=data.get("country"),
+                area=data.get("area"),
+                begin_date=data.get("begin_date"),
+                end_date=data.get("end_date"),
+                ended=data.get("ended"),
+                mb_genres=data.get("mb_genres"),
+                rating=data.get("rating"),
+                rating_votes=data.get("rating_votes"),
+                urls=data.get("urls"),
+            )
             results[name] = genre_label
 
         return results
@@ -130,9 +139,22 @@ class MusicBrainzEnricher(BaseEnricher):
 
     def _fetch_and_cache(self, artist_name: str) -> tuple[list[dict], Optional[str]]:
         mbid = self._fetch_mbid(artist_name)
-        tags = self._fetch_tags_by_mbid(mbid) if mbid else self._fetch_tags_by_name(artist_name)
+        data = self._fetch_artist_data(mbid) if mbid else self._fetch_artist_data_by_name(artist_name)
+        tags = data.get("tags", [])
         genre_label = match_genre(tags, self._config.genres, self._config.min_tag_count)
-        self._db.set_cached_genre(artist_name, mbid, tags, genre_label)
+        self._db.set_cached_genre(
+            artist_name, mbid, tags, genre_label,
+            artist_type=data.get("artist_type"),
+            country=data.get("country"),
+            area=data.get("area"),
+            begin_date=data.get("begin_date"),
+            end_date=data.get("end_date"),
+            ended=data.get("ended"),
+            mb_genres=data.get("mb_genres"),
+            rating=data.get("rating"),
+            rating_votes=data.get("rating_votes"),
+            urls=data.get("urls"),
+        )
         return tags, genre_label
 
     def _fetch_mbid(self, artist_name: str) -> Optional[str]:
@@ -149,25 +171,21 @@ class MusicBrainzEnricher(BaseEnricher):
             pass
         return None
 
-    def _fetch_tags_by_mbid(self, mbid: str) -> list[dict]:
-        """Query MusicBrainz by MBID and return tag list."""
+    def _fetch_artist_data(self, mbid: str) -> dict:
+        """Query MusicBrainz by MBID and return parsed artist data dict."""
         self._rate_limit()
         url = MB_ARTIST_BY_ID.format(mbid=urllib.parse.quote(mbid))
         try:
             with httpx.Client(timeout=10, headers=MB_HEADERS) as client:
                 resp = client.get(url)
             if resp.status_code == 200:
-                data = resp.json()
-                return [
-                    {"name": t["name"], "count": t["count"]}
-                    for t in data.get("tags", [])
-                ]
+                return self._parse_artist_response(resp.json())
         except Exception:
             pass
-        return []
+        return {}
 
-    def _fetch_tags_by_name(self, artist_name: str) -> list[dict]:
-        """Fallback: search MusicBrainz by name and use the top-score result's tags."""
+    def _fetch_artist_data_by_name(self, artist_name: str) -> dict:
+        """Fallback: search MusicBrainz by name, use top-score result."""
         self._rate_limit()
         url = MB_ARTIST_SEARCH.format(name=urllib.parse.quote(artist_name))
         try:
@@ -180,10 +198,42 @@ class MusicBrainzEnricher(BaseEnricher):
                     top = max(artists, key=lambda a: a.get("score", 0))
                     mbid = top.get("id")
                     if mbid:
-                        return self._fetch_tags_by_mbid(mbid)
+                        return self._fetch_artist_data(mbid)
         except Exception:
             pass
-        return []
+        return {}
+
+    @staticmethod
+    def _parse_artist_response(data: dict) -> dict:
+        """Extract all enriched fields from a MusicBrainz artist JSON response."""
+        tags = [
+            {"name": t["name"], "count": t["count"]}
+            for t in data.get("tags", [])
+        ]
+        mb_genres = [
+            {"name": g["name"], "count": g["count"]}
+            for g in data.get("genres", [])
+        ]
+        urls = [
+            {"type": r.get("type", ""), "url": r.get("url", {}).get("resource", "")}
+            for r in data.get("relations", [])
+            if r.get("url")
+        ]
+        life_span = data.get("life-span", {})
+        rating_data = data.get("rating", {})
+        return {
+            "tags": tags,
+            "mb_genres": mb_genres,
+            "urls": urls,
+            "artist_type": data.get("type"),
+            "country": data.get("country"),
+            "area": (data.get("area") or {}).get("name"),
+            "begin_date": life_span.get("begin"),
+            "end_date": life_span.get("end"),
+            "ended": life_span.get("ended"),
+            "rating": rating_data.get("value"),
+            "rating_votes": rating_data.get("votes-count"),
+        }
 
     def _rate_limit(self) -> None:
         """Enforce minimum delay between MusicBrainz API calls."""

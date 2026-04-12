@@ -2,7 +2,7 @@
 """
 Scrape all Bandsintown venue listing hrefs for San Francisco.
 Output: sf_venues.csv at project root.
-Usage: python scrape_venues.py
+Usage (run from project root): python scripts/scrape_venues.py
 """
 from __future__ import annotations
 
