@@ -54,13 +54,35 @@ class BandsintownScraper(BaseScraper):
         url: Optional[str] = _first_page_url(self._config.latitude, self._config.longitude)
         past_window = False
 
-        with httpx.Client(headers=self._headers, timeout=15, follow_redirects=True) as client:
+        consecutive_empty = 0
+        max_consecutive_empty = 5
+
+        with httpx.Client(headers=self._headers, timeout=30, follow_redirects=True) as client:
             for page_num in range(1, self._config.max_pages + 1):
                 if not url:
                     break
 
-                resp = client.get(url)
-                resp.raise_for_status()
+                for attempt in range(3):
+                    try:
+                        resp = client.get(url)
+                        resp.raise_for_status()
+                        break
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == 416:
+                            print(f"\n[scraper] Reached end of Bandsintown pages at page {page_num}")
+                            url = None
+                        else:
+                            raise
+                        break
+                    except (httpx.ReadTimeout, httpx.ConnectTimeout):
+                        if attempt == 2:
+                            raise
+                        wait = 2 ** attempt
+                        print(f"\n[scraper] Timeout on page {page_num}, retrying in {wait}s...")
+                        time.sleep(wait)
+
+                if url is None:
+                    break
                 data = resp.json()
                 records = data.get("events", [])
 
@@ -116,11 +138,19 @@ class BandsintownScraper(BaseScraper):
                     print(f"[scraper] Passed {date_to} — stopping pagination")
                     break
 
+                if page_events == 0:
+                    consecutive_empty += 1
+                    if consecutive_empty >= max_consecutive_empty:
+                        print(f"[scraper] {max_consecutive_empty} consecutive pages with no SF matches — stopping")
+                        break
+                else:
+                    consecutive_empty = 0
+
                 url = data.get("urlForNextPageOfEvents")
                 if not url:
                     break
 
-                time.sleep(0.3)  # be polite
+                time.sleep(1.0)  # be polite — avoid server-side throttling
 
         print(f"[scraper] Total: {len(events)} SF events in date window")
         return events

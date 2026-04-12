@@ -21,7 +21,7 @@ genres:
 
 sources:
   bandsintown: true
-  billgraham: true
+  billgraham: false
 
 scraper:
   latitude: 37.7749
@@ -30,7 +30,7 @@ scraper:
   # Add "Oakland, CA" or "Berkeley, CA" etc. to expand to broader Bay Area.
   cities:
     - "San Francisco, CA"
-  max_pages: 25               # Safety cap on API pagination (~36 events/page)
+  max_pages: 140              # Bandsintown hard limit is ~138 pages (~36 events/page)
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 enrichment:
