@@ -6,3 +6,6 @@ __pycache__/
 ~/.sfshows/
 debug_*.html
 page.html.
+*.csv
+*.xlsx
+*.xls
