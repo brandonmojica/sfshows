@@ -29,9 +29,7 @@ class Config:
     sources: tuple[str, ...]  # e.g. ("bandsintown", "billgraham")
 
     # Scraper
-    latitude: float
-    longitude: float
-    cities: tuple[str, ...]       # locationText substrings to accept (case-insensitive)
+    venues: tuple[str, ...]       # Bandsintown venue URLs to scrape
     max_pages: int
     user_agent: str
 
@@ -80,9 +78,7 @@ def load_config(path: str = "config.yaml") -> Config:
         days_ahead=int(raw["schedule"]["days_ahead"]),
         genres=genres,
         sources=sources,
-        latitude=float(raw["scraper"]["latitude"]),
-        longitude=float(raw["scraper"]["longitude"]),
-        cities=tuple(raw["scraper"]["cities"]),
+        venues=tuple(raw["scraper"]["venues"]),
         max_pages=int(raw["scraper"]["max_pages"]),
         user_agent=raw["scraper"]["user_agent"],
         min_tag_count=int(raw["enrichment"]["min_tag_count"]),

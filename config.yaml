@@ -24,12 +24,8 @@ sources:
   billgraham: false
 
 scraper:
-  latitude: 37.7749
-  longitude: -122.4194
-  # Only include events where locationText contains one of these strings (case-insensitive).
-  # Add "Oakland, CA" or "Berkeley, CA" etc. to expand to broader Bay Area.
-  cities:
-    - "San Francisco, CA"
+  venues:
+    - https://www.bandsintown.com/v/10019956-the-midway
   max_pages: 140              # Bandsintown hard limit is ~138 pages (~36 events/page)
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 

@@ -82,8 +82,8 @@ def export_csv(shows: list[ShowRecord], path: str) -> None:
     print(f"[csv] Wrote {len(shows)} shows to {path}")
 
 
-async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> tuple[int, int]:
-    """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count)."""
+async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> tuple[int, int, list]:
+    """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count, scraped_shows)."""
     date_from = date.today()
     date_to = date_from + timedelta(days=days_ahead if days_ahead is not None else cfg.days_ahead)
 
@@ -107,6 +107,7 @@ async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> 
     genre_map = enricher.enrich_batch(unique_artists)
 
     new_count = 0
+    scraped_shows = []
     for event in raw_events:
         genre_label = genre_map.get(event.artist_name)
 
@@ -120,12 +121,13 @@ async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> 
             ticket_url=event.ticket_url,
             genre_label=genre_label,
         )
+        scraped_shows.append(show)
         is_new = db.upsert_show(show)
         if is_new:
             new_count += 1
             print(f"[new] {show.artist_name} @ {show.venue_name} — {show.event_datetime} [{genre_label}]")
 
-    return len(raw_events), new_count
+    return len(raw_events), new_count, scraped_shows
 
 
 async def main() -> None:
@@ -142,13 +144,14 @@ async def main() -> None:
 
     try:
         # Step 1: Scrape (unless --notify-only)
+        scraped_shows = []
         if not args.notify_only:
-            scraped_count, new_count = await run_scrape(cfg, db, save_html=args.save_html, days_ahead=args.days_ahead)
+            scraped_count, new_count, scraped_shows = await run_scrape(cfg, db, save_html=args.save_html, days_ahead=args.days_ahead)
             print(f"[run] Scraped {scraped_count} events, {new_count} new")
 
-        # Step 1b: CSV export (all pending shows after scrape)
+        # Step 1b: CSV export (shows from this scrape only)
         if args.csv:
-            export_csv(db.get_pending_shows(), args.csv)
+            export_csv(scraped_shows, args.csv)
 
         # Step 2: Notify (unless --scrape-only)
         if not args.scrape_only:

@@ -12,26 +12,39 @@ from sfshows.config import Config
 from sfshows.scrapers import BaseScraper, RawEvent
 
 SOURCE = "bandsintown"
-EVENTS_API = "https://www.bandsintown.com/all-dates/fetch-next/upcomingEvents"
+BIT_BASE = "https://www.bandsintown.com"
+ALL_DATES_API = f"{BIT_BASE}/all-dates/fetch-next/upcomingEvents"
 
 
-def _first_page_url(lat: float, lon: float) -> str:
-    return f"{EVENTS_API}?page=1&longitude={lon}&latitude={lat}"
+def _venue_param(venue_url: str) -> str:
+    """Extract API param from URL: 'https://.../v/10019956-the-midway' → '10019956-the-midway'."""
+    path = urlparse(venue_url).path.rstrip("/")
+    return path.split("/v/")[-1]
+
+
+def _venue_slug(venue_url: str) -> str:
+    """Human-readable slug: '10019956-the-midway' → 'the-midway'."""
+    param = _venue_param(venue_url)
+    # Strip leading numeric ID segment
+    return re.sub(r"^\d+-", "", param)
+
+
+def _venue_keywords(venue_url: str) -> list[str]:
+    """Words 5+ chars from slug used for venueName matching: 'the-midway' → ['midway']."""
+    slug = _venue_slug(venue_url)
+    return [w for w in slug.split("-") if len(w) >= 5]
+
+
+def _matches_venue(venue_name: str, keywords: list[str]) -> bool:
+    """Return True if venueName contains all venue keywords (case-insensitive)."""
+    name_lower = venue_name.lower()
+    return all(kw in name_lower for kw in keywords) if keywords else True
 
 
 def _extract_event_id(event_url: str) -> str:
-    """Extract numeric event ID from a Bandsintown event URL.
-    e.g. https://www.bandsintown.com/e/108164990-artist-name -> '108164990'
-    """
     path = urlparse(event_url).path
     m = re.search(r"/e/(\d+)", path)
     return m.group(1) if m else path.lstrip("/")
-
-
-def _in_cities(location_text: str, cities: tuple[str, ...]) -> bool:
-    """Return True if locationText contains any of the configured city strings."""
-    loc = location_text.lower()
-    return any(city.lower() in loc for city in cities)
 
 
 class BandsintownScraper(BaseScraper):
@@ -40,22 +53,42 @@ class BandsintownScraper(BaseScraper):
         self._headers = {
             "User-Agent": self._config.user_agent,
             "Accept": "application/json, text/plain, */*",
-            "Referer": "https://www.bandsintown.com/",
+            "Referer": BIT_BASE + "/",
         }
 
-    async def scrape(  # async to satisfy BaseScraper ABC; httpx calls are sync internally
+    async def scrape(
         self,
         date_from: date,
         date_to: date,
-        save_html: Optional[str] = None,  # kept for CLI compat, unused
+        save_html: Optional[str] = None,
+    ) -> list[RawEvent]:
+        all_events: list[RawEvent] = []
+        seen_ids: set[str] = set()
+
+        for venue_url in self._config.venues:
+            slug = _venue_slug(venue_url)
+            venue_events = self._scrape_venue(venue_url, slug, date_from, date_to, seen_ids)
+            all_events.extend(venue_events)
+
+        print(f"[scraper:bandsintown] Total: {len(all_events)} events across {len(self._config.venues)} venue(s)")
+        return all_events
+
+    def _scrape_venue(
+        self,
+        venue_url: str,
+        slug: str,
+        date_from: date,
+        date_to: date,
+        seen_ids: set[str],
     ) -> list[RawEvent]:
         events: list[RawEvent] = []
-        seen_ids: set[str] = set()
-        url: Optional[str] = _first_page_url(self._config.latitude, self._config.longitude)
-        past_window = False
-
+        param = _venue_param(venue_url)
+        keywords = _venue_keywords(venue_url)
+        url: Optional[str] = f"{ALL_DATES_API}?page=1&venue={param}"
         consecutive_empty = 0
         max_consecutive_empty = 5
+
+        print(f"[scraper:bandsintown] Scraping venue: {slug} (matching: {keywords})")
 
         with httpx.Client(headers=self._headers, timeout=30, follow_redirects=True) as client:
             for page_num in range(1, self._config.max_pages + 1):
@@ -69,7 +102,7 @@ class BandsintownScraper(BaseScraper):
                         break
                     except httpx.HTTPStatusError as e:
                         if e.response.status_code == 416:
-                            print(f"\n[scraper] Reached end of Bandsintown pages at page {page_num}")
+                            print(f"\n[scraper:bandsintown] Reached end of pages for {slug} at page {page_num}")
                             url = None
                         else:
                             raise
@@ -78,17 +111,19 @@ class BandsintownScraper(BaseScraper):
                         if attempt == 2:
                             raise
                         wait = 2 ** attempt
-                        print(f"\n[scraper] Timeout on page {page_num}, retrying in {wait}s...")
+                        print(f"\n[scraper:bandsintown] Timeout on {slug} page {page_num}, retrying in {wait}s...")
                         time.sleep(wait)
 
                 if url is None:
                     break
+
                 data = resp.json()
                 records = data.get("events", [])
 
-                print(f"[scraper] Page {page_num}: {len(records)} records", end="")
+                print(f"[scraper:bandsintown] {slug} page {page_num}: {len(records)} records", end="")
 
                 page_events = 0
+                past_window = False
                 for record in records:
                     starts_at = record.get("startsAt", "")
                     if not starts_at:
@@ -101,7 +136,6 @@ class BandsintownScraper(BaseScraper):
 
                     event_date = event_dt.date()
 
-                    # Once we've passed the date window, stop paginating
                     if event_date > date_to:
                         past_window = True
                         break
@@ -109,8 +143,8 @@ class BandsintownScraper(BaseScraper):
                     if event_date < date_from:
                         continue
 
-                    location = record.get("locationText", "")
-                    if not _in_cities(location, self._config.cities):
+                    venue_name = record.get("venueName", "")
+                    if not _matches_venue(venue_name, keywords):
                         continue
 
                     event_url = record.get("eventUrl", "")
@@ -123,8 +157,8 @@ class BandsintownScraper(BaseScraper):
                         RawEvent(
                             event_id=event_id,
                             artist_name=record.get("artistName", "Unknown"),
-                            venue_name=record.get("venueName", "Unknown Venue"),
-                            venue_city=location,
+                            venue_name=venue_name,
+                            venue_city=record.get("locationText", ""),
                             event_datetime=event_dt.isoformat(timespec="seconds"),
                             ticket_url=event_url.split("?")[0] if event_url else None,
                             source=SOURCE,
@@ -135,13 +169,13 @@ class BandsintownScraper(BaseScraper):
                 print(f", {page_events} matched")
 
                 if past_window:
-                    print(f"[scraper] Passed {date_to} — stopping pagination")
+                    print(f"[scraper:bandsintown] Passed {date_to} for {slug} — stopping")
                     break
 
                 if page_events == 0:
                     consecutive_empty += 1
                     if consecutive_empty >= max_consecutive_empty:
-                        print(f"[scraper] {max_consecutive_empty} consecutive pages with no SF matches — stopping")
+                        print(f"[scraper:bandsintown] {max_consecutive_empty} consecutive empty pages for {slug} — stopping")
                         break
                 else:
                     consecutive_empty = 0
@@ -150,7 +184,7 @@ class BandsintownScraper(BaseScraper):
                 if not url:
                     break
 
-                time.sleep(1.0)  # be polite — avoid server-side throttling
+                time.sleep(1.0)
 
-        print(f"[scraper] Total: {len(events)} SF events in date window")
+        print(f"[scraper:bandsintown] {slug}: {len(events)} events in date window")
         return events
