@@ -6,9 +6,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import httpx
-from tqdm import tqdm
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 from sfshows.config import Config, GenreRule
+from sfshows.console import console
 from sfshows.db import Database
 from sfshows.enrichment import BaseEnricher
 
@@ -91,11 +92,11 @@ class MusicBrainzEnricher(BaseEnricher):
 
         cache_hits = len(artist_names) - len(misses)
         if misses:
-            print(
-                f"[enricher] {cache_hits} cached, {len(misses)} need lookup"
+            console.print(
+                f"  [dim]{cache_hits} cached,[/] [bold]{len(misses)}[/] [dim]need lookup[/]"
             )
         else:
-            print(f"[enricher] All {cache_hits} artists cached — skipping API calls")
+            console.print(f"  [dim]All {cache_hits} artists cached — skipping API calls[/]")
             return results
 
         # Step 2: parallel MBID fetches for cache misses
@@ -112,25 +113,34 @@ class MusicBrainzEnricher(BaseEnricher):
                     mbid_map[name] = None
 
         # Step 3: sequential MusicBrainz lookups (1/sec rate limit)
-        for name in tqdm(misses, desc="Enriching artists", unit="artist"):
-            mbid = mbid_map.get(name)
-            data = self._fetch_artist_data(mbid) if mbid else self._fetch_artist_data_by_name(name)
-            tags = data.get("tags", [])
-            genre_label = match_genre(tags, self._config.genres, self._config.min_tag_count)
-            self._db.set_cached_genre(
-                name, mbid, tags, genre_label,
-                artist_type=data.get("artist_type"),
-                country=data.get("country"),
-                area=data.get("area"),
-                begin_date=data.get("begin_date"),
-                end_date=data.get("end_date"),
-                ended=data.get("ended"),
-                mb_genres=data.get("mb_genres"),
-                rating=data.get("rating"),
-                rating_votes=data.get("rating_votes"),
-                urls=data.get("urls"),
-            )
-            results[name] = genre_label
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task("Enriching artists", total=len(misses))
+            for name in misses:
+                mbid = mbid_map.get(name)
+                data = self._fetch_artist_data(mbid) if mbid else self._fetch_artist_data_by_name(name)
+                tags = data.get("tags", [])
+                genre_label = match_genre(tags, self._config.genres, self._config.min_tag_count)
+                self._db.set_cached_genre(
+                    name, mbid, tags, genre_label,
+                    artist_type=data.get("artist_type"),
+                    country=data.get("country"),
+                    area=data.get("area"),
+                    begin_date=data.get("begin_date"),
+                    end_date=data.get("end_date"),
+                    ended=data.get("ended"),
+                    mb_genres=data.get("mb_genres"),
+                    rating=data.get("rating"),
+                    rating_votes=data.get("rating_votes"),
+                    urls=data.get("urls"),
+                )
+                results[name] = genre_label
+                progress.advance(task_id)
 
         return results
 

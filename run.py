@@ -14,10 +14,13 @@ import argparse
 import asyncio
 import csv
 import sys
-import traceback
 from datetime import datetime, timedelta
 
+from rich.panel import Panel
+from rich.table import Table
+
 from sfshows.config import load_config
+from sfshows.console import console
 from sfshows.db import Database, ShowRecord
 from sfshows.digest import format_digest
 from sfshows.enrichment.musicbrainz import MusicBrainzEnricher
@@ -73,11 +76,11 @@ def export_csv(shows: list[dict], path: str) -> None:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(shows)
-    print(f"[csv] Wrote {len(shows)} shows to {path}")
+    console.print(f"  [dim]Exported[/] [bold]{len(shows)}[/] [dim]shows to[/] [cyan]{path}[/]")
 
 
-async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
-    """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count, scraped_shows)."""
+async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list, list]:
+    """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count, scraped_shows, new_shows)."""
     scraper_registry: dict[str, BaseScraper] = {
         "bandsintown": BandsintownScraper(cfg),
     }
@@ -86,7 +89,7 @@ async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
     for source in cfg.sources:
         scraper = scraper_registry.get(source)
         if scraper is None:
-            print(f"[run] Unknown source '{source}' in config — skipping")
+            console.print(f"  [yellow]Unknown source '{source}' in config — skipping[/]")
             continue
         raw_events.extend(await scraper.scrape(save_html=save_html))
 
@@ -94,11 +97,14 @@ async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
 
     # Deduplicate artists — look each up once regardless of how many shows they have
     unique_artists = list({e.artist_name for e in raw_events})
-    print(f"[run] {len(raw_events)} events, {len(unique_artists)} unique artists")
+    console.print(
+        f"  [dim]{len(raw_events)} events,[/] [bold]{len(unique_artists)}[/] [dim]unique artists[/]"
+    )
     genre_map = enricher.enrich_batch(unique_artists)
 
     new_count = 0
     scraped_shows = []
+    new_shows = []
     for event in raw_events:
         genre_label = genre_map.get(event.artist_name)
 
@@ -116,13 +122,55 @@ async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
         is_new = db.upsert_show(show)
         if is_new:
             new_count += 1
-            print(f"[new] {show.artist_name} @ {show.venue_name} — {show.event_datetime} [{genre_label}]")
+            new_shows.append(show)
+            console.print(
+                f"  [cyan]•[/] [bold]{show.artist_name}[/] [dim]@[/] {show.venue_name}"
+                f"  [dim]{show.event_datetime}[/]"
+                + (f"  [yellow]{genre_label}[/]" if genre_label else "")
+            )
 
-    return len(raw_events), new_count, scraped_shows
+    return len(raw_events), new_count, scraped_shows, new_shows
+
+
+def _print_summary(
+    scraped: int, new: int, notified: int, new_shows: list[ShowRecord], elapsed: float
+) -> None:
+    """Print a Rich panel summarizing the run stats and any new shows found."""
+    minutes, seconds = divmod(int(elapsed), 60)
+    elapsed_str = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+
+    stats = Table.grid(padding=(0, 3))
+    stats.add_column(style="dim")
+    stats.add_column(style="bold")
+    stats.add_row("Scraped", str(scraped))
+    stats.add_row("New", str(new))
+    stats.add_row("Notified", str(notified))
+    stats.add_row("Time", elapsed_str)
+    console.print(Panel(stats, title="[bold]Run Complete[/]", border_style="green", padding=(1, 3)))
+
+    if new_shows:
+        table = Table(show_header=True, header_style="bold dim", box=None, padding=(0, 2))
+        table.add_column("Artist", style="bold")
+        table.add_column("Venue", style="")
+        table.add_column("Date", style="dim")
+        table.add_column("Genre", style="yellow")
+        for show in new_shows:
+            dt = show.event_datetime
+            date_str = dt.strftime("%-d %b") if hasattr(dt, "strftime") else str(dt)
+            table.add_row(
+                show.artist_name,
+                show.venue_name,
+                date_str,
+                show.genre_label or "—",
+            )
+        console.print(table)
 
 
 async def main() -> None:
     """Entry point: parse args, then run the scrape and/or notification pipeline."""
+    import time
+    start_time = time.monotonic()
+
     args = parse_args()
     cfg = load_config("config.yaml")
 
@@ -133,6 +181,7 @@ async def main() -> None:
     new_count = 0
     notified_count = 0
     error_msg = None
+    new_shows: list[ShowRecord] = []
 
     # When --csv is the only flag, skip scraping and notification — just dump the DB.
     csv_only = bool(args.csv) and not (args.notify_only or args.dry_run or args.scrape_only)
@@ -141,8 +190,13 @@ async def main() -> None:
         # Step 1: Scrape (unless --notify-only or csv_only)
         scraped_shows = []
         if not args.notify_only and not csv_only:
-            scraped_count, new_count, scraped_shows = await run_scrape(cfg, db, save_html=args.save_html)
-            print(f"[run] Scraped {scraped_count} events, {new_count} new")
+            scraped_count, new_count, scraped_shows, new_shows = await run_scrape(
+                cfg, db, save_html=args.save_html
+            )
+            console.print(
+                f"  [dim]Scraped[/] [bold]{scraped_count}[/] [dim]events,[/] "
+                f"[bold green]{new_count}[/] [dim]new[/]"
+            )
 
         # Step 1b: CSV export (all shows in DB, joined with enrichment data)
         if args.csv:
@@ -152,7 +206,10 @@ async def main() -> None:
         if not args.scrape_only and not csv_only:
             pending = db.get_pending_shows()
             if not pending:
-                print("[run] No pending shows to notify about")
+                console.print("  [dim]No pending shows to notify about[/]")
+                db.log_run(scraped_count, new_count, notified_count, error_msg)
+                db.close()
+                _print_summary(scraped_count, new_count, notified_count, new_shows, time.monotonic() - start_time)
                 return
 
             date_from_dt = datetime.now()
@@ -168,32 +225,43 @@ async def main() -> None:
             )
 
             if args.dry_run:
-                print("\n" + "=" * 60)
-                print("DRY RUN — digest preview (not sent):")
-                print("=" * 60)
-                print(message)
-                print("=" * 60)
+                console.print(
+                    Panel(
+                        message,
+                        title="[bold yellow]DRY RUN — digest preview (not sent)[/]",
+                        border_style="yellow",
+                        padding=(1, 2),
+                    )
+                )
             else:
                 targets = list(cfg.recipients) + ([cfg.group_name] if cfg.group_name else [])
-                print(f"[run] Sending digest ({len(capped)} shows) to: {', '.join(targets)}")
+                console.print(
+                    f"  [dim]Sending digest ({len(capped)} shows) to:[/] "
+                    f"[bold]{', '.join(targets)}[/]"
+                )
                 send_imessage(message, recipients=cfg.recipients, group_name=cfg.group_name)
                 db.mark_notified([s.event_id for s in pending])
                 notified_count = len(pending)
-                print(f"[run] Sent and marked {notified_count} shows as notified")
 
     except NotificationError as e:
         error_msg = str(e)
-        print(f"[error] iMessage failed: {e}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        error_msg = traceback.format_exc()
-        print(f"[error] {e}", file=sys.stderr)
-        traceback.print_exc()
-        db.log_run(scraped_count, new_count, notified_count, error_msg)
-        sys.exit(1)
-    finally:
+        console.print(
+            Panel(str(e), title="[bold red]iMessage Error[/]", border_style="red"),
+        )
         db.log_run(scraped_count, new_count, notified_count, error_msg)
         db.close()
+        sys.exit(1)
+    except Exception:
+        console.print_exception()
+        error_msg = "exception (see above)"
+        db.log_run(scraped_count, new_count, notified_count, error_msg)
+        db.close()
+        sys.exit(1)
+
+    db.log_run(scraped_count, new_count, notified_count, error_msg)
+    db.close()
+
+    _print_summary(scraped_count, new_count, notified_count, new_shows, time.monotonic() - start_time)
 
 
 if __name__ == "__main__":

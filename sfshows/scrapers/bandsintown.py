@@ -8,9 +8,10 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-from tqdm.asyncio import tqdm as atqdm
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 from sfshows.config import Config
+from sfshows.console import console
 from sfshows.scrapers import BaseScraper, RawEvent
 
 SOURCE = "bandsintown"
@@ -170,12 +171,24 @@ class BandsintownScraper(BaseScraper):
 
                 return _parse_events(html, venue_url)
 
-            tasks = [scrape_one(url) for url in self._config.venues]
-            results: list[list[RawEvent]] = await atqdm.gather(
-                *tasks,
-                desc="Scraping venues",
-                unit="venue",
-            )
+            coros = [scrape_one(url) for url in self._config.venues]
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                console=console,
+            ) as progress:
+                task_id = progress.add_task("Scraping venues", total=len(coros))
+
+                async def wrapped(coro):
+                    result = await coro
+                    progress.advance(task_id)
+                    return result
+
+                results: list[list[RawEvent]] = await asyncio.gather(
+                    *[wrapped(c) for c in coros]
+                )
 
             await browser.close()
 
@@ -183,5 +196,8 @@ class BandsintownScraper(BaseScraper):
         for events in results:
             all_events.extend(events)
 
-        print(f"[scraper:bandsintown] Total: {len(all_events)} events across {len(self._config.venues)} venue(s)")
+        console.print(
+            f"  [dim]Scraped[/] [bold]{len(all_events)}[/] [dim]events across[/] "
+            f"[bold]{len(self._config.venues)}[/] [dim]venue(s)[/]"
+        )
         return all_events
