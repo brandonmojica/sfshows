@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import httpx
+from tqdm import tqdm
 
 from sfshows.config import Config, GenreRule
 from sfshows.db import Database
@@ -110,7 +111,7 @@ class MusicBrainzEnricher(BaseEnricher):
                     mbid_map[name] = None
 
         # Step 3: sequential MusicBrainz tag lookups (1/sec rate limit)
-        for i, name in enumerate(misses, 1):
+        for name in tqdm(misses, desc="Enriching artists", unit="artist"):
             mbid = mbid_map.get(name)
             if mbid:
                 tags = self._fetch_tags_by_mbid(mbid)
@@ -120,9 +121,6 @@ class MusicBrainzEnricher(BaseEnricher):
             genre_label = match_genre(tags, self._config.genres, self._config.min_tag_count)
             self._db.set_cached_genre(name, mbid, tags, genre_label)
             results[name] = genre_label
-
-            if i % 10 == 0 or i == len(misses):
-                print(f"[enricher] {i}/{len(misses)} looked up")
 
         return results
 

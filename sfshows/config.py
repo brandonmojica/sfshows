@@ -32,6 +32,7 @@ class Config:
     venues: tuple[str, ...]       # Bandsintown venue URLs to scrape
     max_pages: int
     user_agent: str
+    venue_concurrency: int        # Number of venues to scrape in parallel
 
     # Enrichment
     min_tag_count: int
@@ -81,6 +82,7 @@ def load_config(path: str = "config.yaml") -> Config:
         venues=tuple(raw["scraper"]["venues"]),
         max_pages=int(raw["scraper"]["max_pages"]),
         user_agent=raw["scraper"]["user_agent"],
+        venue_concurrency=int(raw["scraper"].get("venue_concurrency", 5)),
         min_tag_count=int(raw["enrichment"]["min_tag_count"]),
         request_delay_ms=int(raw["enrichment"]["request_delay_ms"]),
         cache_ttl_days=int(raw["enrichment"]["cache_ttl_days"]),

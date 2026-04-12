@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import date, datetime
 from typing import Optional
@@ -7,6 +8,7 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
+from tqdm.asyncio import tqdm as atqdm
 
 from sfshows.config import Config
 from sfshows.scrapers import BaseScraper, RawEvent
@@ -51,7 +53,7 @@ def _parse_date(card) -> Optional[date]:
         return None
 
 
-def _parse_events(html: str, date_from: date, date_to: date, venue_url: str) -> list[RawEvent]:
+def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
     soup = BeautifulSoup(html, "lxml")
     events: list[RawEvent] = []
     seen_ids: set[str] = set()
@@ -81,11 +83,7 @@ def _parse_events(html: str, date_from: date, date_to: date, venue_url: str) -> 
 
         # Parse date from month/day text in card
         event_date = _parse_date(card)
-
-        # Date window filter
         if event_date:
-            if event_date < date_from or event_date > date_to:
-                continue
             event_datetime_str = datetime.combine(event_date, datetime.min.time()).isoformat(timespec="seconds")
         else:
             event_datetime_str = ""
@@ -111,11 +109,10 @@ class BandsintownScraper(BaseScraper):
 
     async def scrape(
         self,
-        date_from: date,
-        date_to: date,
         save_html: Optional[str] = None,
     ) -> list[RawEvent]:
-        all_events: list[RawEvent] = []
+        concurrency = self._config.venue_concurrency
+        semaphore = asyncio.Semaphore(concurrency)
 
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True)
@@ -124,36 +121,52 @@ class BandsintownScraper(BaseScraper):
                 locale="en-US",
             )
 
-            for venue_url in self._config.venues:
-                print(f"[scraper:bandsintown] Loading {venue_url}")
-                page = await context.new_page()
+            async def scrape_one(venue_url: str) -> list[RawEvent]:
+                async with semaphore:
+                    page = await context.new_page()
+                    try:
+                        await page.goto(venue_url, wait_until="load", timeout=60_000)
 
-                await page.goto(venue_url, wait_until="load", timeout=60_000)
-                await page.wait_for_timeout(3000)  # allow JS to render events
+                        # Wait for event links to appear (faster than a fixed sleep)
+                        try:
+                            await page.wait_for_selector(
+                                'a[href*="/e/"]', timeout=5000
+                            )
+                        except Exception:
+                            # No events found or slow page — give it a brief extra moment
+                            await page.wait_for_timeout(1000)
 
-                # Expand all dates if "Show More Dates" button is present
-                try:
-                    show_more = page.get_by_text("Show More Dates", exact=False)
-                    if await show_more.count() > 0:
-                        print(f"[scraper:bandsintown] Clicking 'Show More Dates'...")
-                        await show_more.first.click()
-                        await page.wait_for_timeout(2000)
-                except Exception:
-                    pass
+                        # Expand all dates if "Show More Dates" button is present
+                        try:
+                            show_more = page.get_by_text("Show More Dates", exact=False)
+                            if await show_more.count() > 0:
+                                await show_more.first.click()
+                                await page.wait_for_timeout(1500)
+                        except Exception:
+                            pass
 
-                html = await page.content()
-                await page.close()
+                        html = await page.content()
+                    finally:
+                        await page.close()
 
                 if save_html:
                     with open(save_html, "w", encoding="utf-8") as f:
                         f.write(html)
-                    print(f"[scraper:bandsintown] HTML saved to {save_html}")
 
-                events = _parse_events(html, date_from, date_to, venue_url)
-                print(f"[scraper:bandsintown] {venue_url.split('/')[-1]}: found {len(events)} events")
-                all_events.extend(events)
+                return _parse_events(html, venue_url)
+
+            tasks = [scrape_one(url) for url in self._config.venues]
+            results: list[list[RawEvent]] = await atqdm.gather(
+                *tasks,
+                desc="Scraping venues",
+                unit="venue",
+            )
 
             await browser.close()
+
+        all_events: list[RawEvent] = []
+        for events in results:
+            all_events.extend(events)
 
         print(f"[scraper:bandsintown] Total: {len(all_events)} events across {len(self._config.venues)} venue(s)")
         return all_events

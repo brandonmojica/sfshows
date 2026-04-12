@@ -25,7 +25,57 @@ sources:
 
 scraper:
   venues:
+    - https://www.bandsintown.com/v/10000107-brick-and-mortar-music-hall
+    - https://www.bandsintown.com/v/10000166-bimbo's-365-club
+    - https://www.bandsintown.com/v/10000215-great-american-music-hall
+    - https://www.bandsintown.com/v/10000237-sweetwater-music-hall
+    - https://www.bandsintown.com/v/10000240-rickshaw-stop
+    - https://www.bandsintown.com/v/10000256-palace-of-fine-arts-theatre
+    - https://www.bandsintown.com/v/10000288-neck-of-the-woods
+    - https://www.bandsintown.com/v/10000294-sfjazz-center
+    - https://www.bandsintown.com/v/10000445-thee-parkside
+    - https://www.bandsintown.com/v/10000606-oakland-arena
+    - https://www.bandsintown.com/v/10000633-the-freight
+    - https://www.bandsintown.com/v/10000719-cow-palace
+    - https://www.bandsintown.com/v/10000903-the-chapel
+    - https://www.bandsintown.com/v/10000936-swedish-american-hall
+    - https://www.bandsintown.com/v/10001006-yoshi's
+    - https://www.bandsintown.com/v/10001033-dna-lounge
+    - https://www.bandsintown.com/v/10001269-punch-line-comedy-club
+    - https://www.bandsintown.com/v/10001325-bottom-of-the-hill
+    - https://www.bandsintown.com/v/10001466-the-independent
+    - https://www.bandsintown.com/v/10001579-fox-theater
+    - https://www.bandsintown.com/v/10001685-the-warfield
+    - https://www.bandsintown.com/v/10001698-the-fillmore
+    - https://www.bandsintown.com/v/10001913-cafe-du-nord
+    - https://www.bandsintown.com/v/10001950-public-works
+    - https://www.bandsintown.com/v/10002004-the-regency-ballroom
+    - https://www.bandsintown.com/v/10002069-davies-symphony-hall
+    - https://www.bandsintown.com/v/10002134-1015-folsom
+    - https://www.bandsintown.com/v/10002664-hopmonk-tavern
+    - https://www.bandsintown.com/v/10002700-cobb's-comedy-club
+    - https://www.bandsintown.com/v/10003403-924-gilman
+    - https://www.bandsintown.com/v/10003699-temple-sf
+    - https://www.bandsintown.com/v/10003975-audio-sf
+    - https://www.bandsintown.com/v/10004081-bill-graham-civic-auditorium
+    - https://www.bandsintown.com/v/10004437-golden-gate-theater
+    - https://www.bandsintown.com/v/10004699-herbst-theatre
+    - https://www.bandsintown.com/v/10005496-paramount-theatre-oakland
+    - https://www.bandsintown.com/v/10006044-ivy-room
+    - https://www.bandsintown.com/v/10006536-the-great-northern
+    - https://www.bandsintown.com/v/10006798-oracle-park
+    - https://www.bandsintown.com/v/10009399-the-masonic
+    - https://www.bandsintown.com/v/10009662-cornerstone-craft-beer-and-live-music
+    - https://www.bandsintown.com/v/10009701-the-greek-theatre-at-uc-berkeley
+    - https://www.bandsintown.com/v/10012811-the-castro-theatre
+    - https://www.bandsintown.com/v/10018678-august-hall
     - https://www.bandsintown.com/v/10019956-the-midway
+    - https://www.bandsintown.com/v/10023331-golden-gate-park
+    - https://www.bandsintown.com/v/10031049-chase-center
+    - https://www.bandsintown.com/v/10067723-presidio-theatre
+    - https://www.bandsintown.com/v/10078923-the-uc-theatre
+    - https://www.bandsintown.com/v/10334599-kilowatt-bar
+  venue_concurrency: 5        # Number of venue pages to scrape in parallel
   max_pages: 140              # Bandsintown hard limit is ~138 pages (~36 events/page)
   user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 

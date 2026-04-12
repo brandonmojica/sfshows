@@ -15,7 +15,7 @@ import asyncio
 import csv
 import sys
 import traceback
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sfshows.config import load_config
 from sfshows.db import Database, ShowRecord
@@ -54,12 +54,6 @@ def parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="Export scraped shows to a CSV file (e.g. shows.csv)",
     )
-    parser.add_argument(
-        "--days-ahead",
-        type=int,
-        metavar="N",
-        help="How many days ahead to scrape (overrides config days_ahead).",
-    )
     return parser.parse_args()
 
 
@@ -82,11 +76,8 @@ def export_csv(shows: list[ShowRecord], path: str) -> None:
     print(f"[csv] Wrote {len(shows)} shows to {path}")
 
 
-async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> tuple[int, int, list]:
+async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
     """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count, scraped_shows)."""
-    date_from = date.today()
-    date_to = date_from + timedelta(days=days_ahead if days_ahead is not None else cfg.days_ahead)
-
     scraper_registry: dict[str, BaseScraper] = {
         "bandsintown": BandsintownScraper(cfg),
     }
@@ -97,7 +88,7 @@ async def run_scrape(cfg, db, save_html: str = None, days_ahead: int = None) -> 
         if scraper is None:
             print(f"[run] Unknown source '{source}' in config — skipping")
             continue
-        raw_events.extend(await scraper.scrape(date_from, date_to, save_html=save_html))
+        raw_events.extend(await scraper.scrape(save_html=save_html))
 
     enricher = MusicBrainzEnricher(cfg, db)
 
@@ -146,7 +137,7 @@ async def main() -> None:
         # Step 1: Scrape (unless --notify-only)
         scraped_shows = []
         if not args.notify_only:
-            scraped_count, new_count, scraped_shows = await run_scrape(cfg, db, save_html=args.save_html, days_ahead=args.days_ahead)
+            scraped_count, new_count, scraped_shows = await run_scrape(cfg, db, save_html=args.save_html)
             print(f"[run] Scraped {scraped_count} events, {new_count} new")
 
         # Step 1b: CSV export (shows from this scrape only)

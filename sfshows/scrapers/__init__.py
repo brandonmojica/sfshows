@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date
 from typing import Optional
 
 
@@ -18,5 +17,5 @@ class RawEvent:
 
 class BaseScraper(ABC):
     @abstractmethod
-    async def scrape(self, date_from: date, date_to: date) -> list[RawEvent]:
-        """Return all raw events in the given date window."""
+    async def scrape(self) -> list[RawEvent]:
+        """Return all upcoming events from the source."""

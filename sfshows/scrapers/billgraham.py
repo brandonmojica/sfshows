@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -36,7 +36,7 @@ def _event_id_from_url(url: str) -> str:
     return urlparse(url).path.rstrip("/").split("/")[-1]
 
 
-def _parse_events(html: str, date_from: date, date_to: date) -> list[RawEvent]:
+def _parse_events(html: str) -> list[RawEvent]:
     soup = BeautifulSoup(html, "lxml")
     events: list[RawEvent] = []
     seen: set[str] = set()
@@ -46,14 +46,6 @@ def _parse_events(html: str, date_from: date, date_to: date) -> list[RawEvent]:
         content = date_el.get("content", "")
         event_datetime = _parse_date(content)
         if not event_datetime:
-            continue
-
-        try:
-            event_date = datetime.fromisoformat(event_datetime).date()
-        except ValueError:
-            continue
-
-        if not (date_from <= event_date <= date_to):
             continue
 
         # Walk up to the card container (2 levels up from date-show div)
@@ -102,8 +94,6 @@ def _parse_events(html: str, date_from: date, date_to: date) -> list[RawEvent]:
 class BillGrahamScraper(BaseScraper):
     async def scrape(
         self,
-        date_from: date,
-        date_to: date,
         save_html: Optional[str] = None,
     ) -> list[RawEvent]:
         print(f"[scraper:billgraham] Fetching {LISTING_URL}")
@@ -116,6 +106,6 @@ class BillGrahamScraper(BaseScraper):
                 f.write(resp.text)
             print(f"[scraper:billgraham] HTML saved to {save_html}")
 
-        events = _parse_events(resp.text, date_from, date_to)
-        print(f"[scraper:billgraham] Found {len(events)} events in date window")
+        events = _parse_events(resp.text)
+        print(f"[scraper:billgraham] Found {len(events)} upcoming events")
         return events
