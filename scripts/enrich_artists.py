@@ -34,6 +34,7 @@ from sfshows.enrichment.musicbrainz import (
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def fetch_mbid(artist_name: str) -> Optional[str]:
+    """Look up a MusicBrainz ID for the given artist via the Bandsintown REST API."""
     url = BANDSINTOWN_API.format(name=urllib.parse.quote(artist_name))
     try:
         resp = httpx.get(url, timeout=10)
@@ -48,6 +49,7 @@ def fetch_mbid(artist_name: str) -> Optional[str]:
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """CLI entry point for backfilling or refreshing MusicBrainz artist data in the database."""
     parser = argparse.ArgumentParser(description="Backfill MusicBrainz artist data")
     parser.add_argument(
         "--force",

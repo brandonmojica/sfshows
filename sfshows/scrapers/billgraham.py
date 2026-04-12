@@ -37,6 +37,7 @@ def _event_id_from_url(url: str) -> str:
 
 
 def _parse_events(html: str) -> list[RawEvent]:
+    """Parse Bill Graham Civic Auditorium listing HTML and return a deduplicated list of RawEvents."""
     soup = BeautifulSoup(html, "lxml")
     events: list[RawEvent] = []
     seen: set[str] = set()
@@ -96,6 +97,10 @@ class BillGrahamScraper(BaseScraper):
         self,
         save_html: Optional[str] = None,
     ) -> list[RawEvent]:
+        """Fetch the Bill Graham Civic Auditorium event listing page and return raw events.
+
+        If save_html is provided, the raw response HTML is written to that path.
+        """
         print(f"[scraper:billgraham] Fetching {LISTING_URL}")
         with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
             resp = client.get(LISTING_URL)

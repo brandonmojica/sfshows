@@ -48,6 +48,7 @@ class Config:
 
 
 def load_config(path: str = "config.yaml") -> Config:
+    """Load and validate configuration from a YAML file, returning a frozen Config instance."""
     with open(path, "r") as f:
         raw = yaml.safe_load(f)
 

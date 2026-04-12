@@ -18,6 +18,7 @@ EVENT_URL_PREFIX = "https://www.bandsintown.com/e/"
 
 
 def _extract_event_id(event_url: str) -> str:
+    """Extract the numeric event ID from a Bandsintown event URL."""
     path = urlparse(event_url).path
     m = re.search(r"/e/(\d+)", path)
     return m.group(1) if m else path.lstrip("/")
@@ -30,7 +31,7 @@ MONTH_MAP = {
 
 
 def _parse_date(card) -> Optional[date]:
-    """Extract the start date from an event card by finding month/day text nodes."""
+    """Extract the event start date from a card element by scanning month/day text nodes."""
     texts = [d.get_text(strip=True) for d in card.find_all("div") if d.get_text(strip=True)]
     month_num: Optional[int] = None
     day_num: Optional[int] = None
@@ -54,6 +55,7 @@ def _parse_date(card) -> Optional[date]:
 
 
 def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
+    """Parse rendered Bandsintown venue HTML and return a deduplicated list of RawEvents."""
     soup = BeautifulSoup(html, "lxml")
     events: list[RawEvent] = []
     seen_ids: set[str] = set()
@@ -105,12 +107,18 @@ def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
 
 class BandsintownScraper(BaseScraper):
     def __init__(self, config: Config) -> None:
+        """Initialize the scraper with the given app config."""
         self._config = config
 
     async def scrape(
         self,
         save_html: Optional[str] = None,
     ) -> list[RawEvent]:
+        """Scrape all configured Bandsintown venue pages concurrently and return raw events.
+
+        If save_html is provided, the rendered HTML of the last scraped page is
+        written to that path (useful for debugging CSS selectors).
+        """
         concurrency = self._config.venue_concurrency
         semaphore = asyncio.Semaphore(concurrency)
 

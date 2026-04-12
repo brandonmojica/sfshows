@@ -27,6 +27,7 @@ from sfshows.scrapers.bandsintown import BandsintownScraper
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse and return command-line arguments."""
     parser = argparse.ArgumentParser(description="SF shows scraper and iMessage notifier")
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
@@ -58,6 +59,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def export_csv(shows: list[ShowRecord], path: str) -> None:
+    """Write a list of ShowRecords to a CSV file at the given path."""
     fields = ["artist_name", "venue_name", "venue_city", "event_datetime", "genre_label", "ticket_url", "source", "event_id"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -122,6 +124,7 @@ async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list]:
 
 
 async def main() -> None:
+    """Entry point: parse args, then run the scrape and/or notification pipeline."""
     args = parse_args()
     cfg = load_config("config.yaml")
 

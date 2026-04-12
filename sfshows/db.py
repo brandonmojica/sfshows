@@ -87,11 +87,13 @@ CREATE TABLE IF NOT EXISTS run_log (
 
 class Database:
     def __init__(self, db_path: str) -> None:
+        """Open (or create) the SQLite database at db_path, creating parent directories as needed."""
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
 
     def init_schema(self) -> None:
+        """Create tables if they don't exist and run any pending schema migrations."""
         self._conn.executescript(SCHEMA)
         self._conn.commit()
         self._migrate_artist_genres()
@@ -122,6 +124,7 @@ class Database:
         self._conn.commit()
 
     def close(self) -> None:
+        """Close the underlying database connection."""
         self._conn.close()
 
     # ------------------------------------------------------------------
@@ -156,6 +159,7 @@ class Database:
             return False
 
     def mark_notified(self, event_ids: list[str]) -> None:
+        """Mark the given event IDs as notified so they are excluded from future digests."""
         if not event_ids:
             return
         placeholders = ",".join("?" * len(event_ids))
@@ -166,6 +170,7 @@ class Database:
         self._conn.commit()
 
     def get_pending_shows(self, source: str = "bandsintown") -> list[ShowRecord]:
+        """Return all un-notified shows for the given source, ordered by event date ascending."""
         rows = self._conn.execute(
             """
             SELECT event_id, source, artist_name, venue_name, venue_city,
@@ -298,6 +303,7 @@ class Database:
         rating_votes: Optional[int] = None,
         urls: Optional[list[dict]] = None,
     ) -> None:
+        """Upsert enriched artist metadata into the artist_genres cache table."""
         self._conn.execute(
             """
             INSERT INTO artist_genres
@@ -343,6 +349,7 @@ class Database:
         notified: int,
         error: Optional[str],
     ) -> None:
+        """Append a row to run_log recording the outcome of a pipeline execution."""
         self._conn.execute(
             """
             INSERT INTO run_log (shows_scraped, shows_new, shows_notified, error)

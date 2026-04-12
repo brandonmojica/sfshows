@@ -32,18 +32,21 @@ MAX_STABLE_ITERS = 3
 
 
 def load_user_agent(config_path: str = CONFIG_PATH) -> str:
+    """Read the scraper user_agent string from config.yaml."""
     with open(config_path, "r") as f:
         raw = yaml.safe_load(f)
     return raw["scraper"]["user_agent"]
 
 
 def venue_name_from_url(url: str) -> str:
+    """Derive a human-readable venue name from a Bandsintown venue URL slug."""
     slug = url.rstrip("/").split("/")[-1]  # e.g. "10019956-the-midway"
     name_part = re.sub(r"^\d+-", "", slug)  # strip leading numeric ID
     return unquote(name_part).replace("-", " ").title()
 
 
 def extract_venue_urls(html: str) -> set[str]:
+    """Extract all Bandsintown venue hrefs from the given page HTML."""
     soup = BeautifulSoup(html, "lxml")
     urls: set[str] = set()
     for a in soup.find_all("a", href=True):
@@ -54,6 +57,7 @@ def extract_venue_urls(html: str) -> set[str]:
 
 
 async def scrape_venues() -> list[dict]:
+    """Scroll through the Bandsintown SF venue listing and collect all venue URLs and names."""
     user_agent = load_user_agent()
 
     async with async_playwright() as pw:
@@ -100,6 +104,7 @@ async def scrape_venues() -> list[dict]:
 
 
 def write_csv(rows: list[dict], path: str = OUTPUT_CSV) -> None:
+    """Write venue rows (venue_url, venue_name) to a CSV file."""
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["venue_url", "venue_name"])
         writer.writeheader()
@@ -108,6 +113,7 @@ def write_csv(rows: list[dict], path: str = OUTPUT_CSV) -> None:
 
 
 async def main() -> None:
+    """Entry point: scrape SF venues from Bandsintown and write results to CSV."""
     rows = await scrape_venues()
     write_csv(rows)
 

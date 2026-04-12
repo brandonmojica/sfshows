@@ -94,6 +94,7 @@ def send_imessage(
 
 
 def _run_osascript(script: str, context: str = "") -> None:
+    """Execute an AppleScript snippet via osascript, raising NotificationError on failure."""
     result = subprocess.run(
         ["osascript", "-e", script],
         capture_output=True,

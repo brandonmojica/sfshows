@@ -47,6 +47,7 @@ def match_genre(
 
 class MusicBrainzEnricher(BaseEnricher):
     def __init__(self, config: Config, db: Database) -> None:
+        """Initialize the enricher with app config and a database handle for caching."""
         self._config = config
         self._db = db
         self._last_mb_call: float = 0.0
@@ -138,6 +139,7 @@ class MusicBrainzEnricher(BaseEnricher):
     # ------------------------------------------------------------------
 
     def _fetch_and_cache(self, artist_name: str) -> tuple[list[dict], Optional[str]]:
+        """Fetch full MusicBrainz data for one artist, cache it, and return (tags, genre_label)."""
         mbid = self._fetch_mbid(artist_name)
         data = self._fetch_artist_data(mbid) if mbid else self._fetch_artist_data_by_name(artist_name)
         tags = data.get("tags", [])
