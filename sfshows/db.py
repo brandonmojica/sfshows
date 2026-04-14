@@ -18,6 +18,7 @@ class ShowRecord:
     event_datetime: str   # ISO8601
     ticket_url: Optional[str]
     genre_label: Optional[str]
+    created_at: str = ""  # ISO8601, when the row was first inserted
 
 
 @dataclass
@@ -188,14 +189,14 @@ class Database:
         return [dict(r) for r in rows]
 
     def get_pending_shows(self, source: str = "bandsintown") -> list[ShowRecord]:
-        """Return all un-notified shows for the given source, ordered by event date ascending."""
+        """Return all un-notified shows for the given source, ordered by newest scraped first."""
         rows = self._conn.execute(
             """
             SELECT event_id, source, artist_name, venue_name, venue_city,
-                   event_datetime, ticket_url, genre_label
+                   event_datetime, ticket_url, genre_label, created_at
             FROM shows
             WHERE notified = 0 AND source = ?
-            ORDER BY event_datetime ASC
+            ORDER BY created_at DESC
             """,
             (source,),
         ).fetchall()
@@ -209,6 +210,7 @@ class Database:
                 event_datetime=r["event_datetime"],
                 ticket_url=r["ticket_url"],
                 genre_label=r["genre_label"],
+                created_at=r["created_at"] or "",
             )
             for r in rows
         ]

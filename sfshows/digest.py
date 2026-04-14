@@ -13,6 +13,7 @@ def format_digest(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     total_pending: int = 0,
+    all_shows_url: str = "",
 ) -> str:
     """
     Build a single digest string suitable for iMessage.
@@ -84,5 +85,9 @@ def format_digest(
         remaining = total_pending - len(shows)
         lines.append("")
         lines.append(f"... and {remaining} more show{'s' if remaining != 1 else ''}")
+
+    if all_shows_url:
+        lines.append("")
+        lines.append(f"All shows: {all_shows_url}")
 
     return "\n".join(lines)

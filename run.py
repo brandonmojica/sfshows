@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import random
 import sys
 from datetime import datetime, timedelta
 
@@ -215,13 +216,19 @@ async def main() -> None:
             date_from_dt = datetime.now()
             date_to_dt = date_from_dt + timedelta(days=cfg.days_ahead)
 
-            capped = pending[: cfg.max_shows_per_digest]
+            # pending is already sorted by created_at DESC (newest scrape first)
+            if len(pending) > cfg.max_shows_per_digest:
+                capped = random.sample(pending, cfg.max_shows_per_digest)
+                capped.sort(key=lambda s: s.event_datetime)
+            else:
+                capped = sorted(pending, key=lambda s: s.artist_name.lower())
             message = format_digest(
                 shows=capped,
                 include_ticket_url=cfg.include_ticket_url,
                 date_from=date_from_dt,
                 date_to=date_to_dt,
                 total_pending=len(pending),
+                all_shows_url=cfg.all_shows_url,
             )
 
             if args.dry_run:

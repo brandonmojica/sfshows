@@ -3,7 +3,7 @@ imessage:
   # Add more entries to send to multiple people. For a named group chat,
   # replace this with: group_name: "Your Group Chat Name"
   recipients:
-    - "+14083343076"
+    - "+12103940803"
     # - "+15559876543"
 
 schedule:
@@ -88,5 +88,6 @@ database:
   path: "~/.sfshows/sfshows.db"
 
 notification:
-  max_shows_per_digest: 20    # Truncate digest at N shows
+  max_shows_per_digest: 5     # Randomly sample N shows per digest
+  all_shows_url: ""           # Google Sheets URL — fill in once configured
   include_ticket_url: true

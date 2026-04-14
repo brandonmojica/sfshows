@@ -45,6 +45,7 @@ class Config:
     # Notification
     max_shows_per_digest: int
     include_ticket_url: bool
+    all_shows_url: str  # Google Sheets URL appended to digest (empty = omitted)
 
 
 def load_config(path: str = "config.yaml") -> Config:
@@ -90,4 +91,5 @@ def load_config(path: str = "config.yaml") -> Config:
         db_path=os.path.expanduser(raw["database"]["path"]),
         max_shows_per_digest=int(raw["notification"]["max_shows_per_digest"]),
         include_ticket_url=bool(raw["notification"]["include_ticket_url"]),
+        all_shows_url=str(raw["notification"].get("all_shows_url", "")),
     )
