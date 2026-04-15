@@ -10,6 +10,7 @@ from sfshows.config import load_config
 from sfshows.db import Database
 from sfshows.digest import format_digest
 from sfshows.notifier import send_imessage
+from sfshows.sheets import sync_shows_to_sheet
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
     scrape_date = shows[0].created_at[:10]
     print(f"Last scrape date: {scrape_date}  ({len(shows)} shows available)")
 
-    sample = random.sample(shows, min(5, len(shows)))
+    sample = random.sample(shows, min(8, len(shows)))
 
     # Date range for digest header — use full pool, not just the sample
     datetimes = []
@@ -37,13 +38,18 @@ def main():
     date_from = min(datetimes).date() if datetimes else None
     date_to = max(datetimes).date() if datetimes else None
 
+    all_shows_url = cfg.all_shows_url
+    if cfg.sheets_credentials_path and cfg.sheets_spreadsheet_id:
+        all_shows = db.get_all_shows()
+        all_shows_url = sync_shows_to_sheet(all_shows, cfg)
+
     digest = format_digest(
         shows=sample,
         include_ticket_url=cfg.include_ticket_url,
         date_from=date_from,
         date_to=date_to,
         total_pending=len(shows),
-        all_shows_url=cfg.all_shows_url,
+        all_shows_url=all_shows_url,
     )
 
     print("\n--- Digest Preview ---")

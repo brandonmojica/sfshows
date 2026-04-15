@@ -223,6 +223,14 @@ class Database:
             for r in rows
         ]
 
+    def delete_past_shows(self) -> int:
+        """Delete shows whose date has already passed. Returns count deleted."""
+        cur = self._conn.execute(
+            "DELETE FROM shows WHERE date(event_datetime) < date('now', 'localtime')"
+        )
+        self._conn.commit()
+        return cur.rowcount
+
     def get_shows_from_latest_scrape_date(self) -> list[ShowRecord]:
         """Return all shows whose created_at date matches the most recent scrape date in the DB."""
         row = self._conn.execute(

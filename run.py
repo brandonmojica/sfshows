@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import dataclasses
 import random
 import sys
 from datetime import datetime, timedelta
@@ -184,6 +185,10 @@ async def main() -> None:
     db = Database(cfg.db_path)
     db.init_schema()
 
+    pruned = db.delete_past_shows()
+    if pruned:
+        console.print(f"  [dim]Pruned {pruned} past show(s) from database.[/dim]")
+
     scraped_count = 0
     new_count = 0
     notified_count = 0
@@ -208,6 +213,14 @@ async def main() -> None:
         # Step 1b: CSV export (all shows in DB, joined with enrichment data)
         if args.csv:
             export_csv(db.get_all_shows(), args.csv)
+
+        # Step 1c: Google Sheets sync
+        if cfg.sheets_credentials_path and cfg.sheets_spreadsheet_id and not csv_only:
+            from sfshows.sheets import sync_shows_to_sheet
+            all_shows = db.get_all_shows()
+            sheets_url = sync_shows_to_sheet(all_shows, cfg)
+            cfg = dataclasses.replace(cfg, all_shows_url=sheets_url)
+            console.print(f"  [dim]Sheet synced:[/] [cyan]{sheets_url}[/]")
 
         # Step 2: Notify (unless --scrape-only or csv_only)
         if not args.scrape_only and not csv_only:

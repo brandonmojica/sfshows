@@ -47,6 +47,22 @@ class Config:
     include_ticket_url: bool
     all_shows_url: str  # Google Sheets URL appended to digest (empty = omitted)
 
+    # Google Sheets sync (disabled if credentials_path or spreadsheet_id is unset)
+    sheets_credentials_path: Optional[str]  # path to service account JSON
+    sheets_spreadsheet_id: str              # spreadsheet ID from the sheet URL
+
+
+def _load_sheets_config(raw: dict) -> dict:
+    """Parse the optional google_sheets section from the raw config dict."""
+    gs = raw.get("google_sheets", {})
+    creds_path = gs.get("credentials_path")
+    if creds_path:
+        creds_path = os.path.expanduser(creds_path)
+    return {
+        "sheets_credentials_path": creds_path,
+        "sheets_spreadsheet_id": gs.get("spreadsheet_id", ""),
+    }
+
 
 def load_config(path: str = "config.yaml") -> Config:
     """Load and validate configuration from a YAML file, returning a frozen Config instance."""
@@ -92,4 +108,5 @@ def load_config(path: str = "config.yaml") -> Config:
         max_shows_per_digest=int(raw["notification"]["max_shows_per_digest"]),
         include_ticket_url=bool(raw["notification"]["include_ticket_url"]),
         all_shows_url=str(raw["notification"].get("all_shows_url", "")),
+        **_load_sheets_config(raw),
     )

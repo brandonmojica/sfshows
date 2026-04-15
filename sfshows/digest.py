@@ -78,10 +78,12 @@ def format_digest(
     if total_pending > len(shows):
         remaining = total_pending - len(shows)
         lines.append("")
-        lines.append(f"... and {remaining} more show{'s' if remaining != 1 else ''}")
-
-    if all_shows_url:
+        more_line = f"... and {remaining} more show{'s' if remaining != 1 else ''}"
+        if all_shows_url:
+            more_line += f" → {all_shows_url} (tap to see all)"
+        lines.append(more_line)
+    elif all_shows_url:
         lines.append("")
-        lines.append(f"All shows: {all_shows_url}")
+        lines.append(f"→ {all_shows_url} (tap to see all)")
 
     return "\n".join(lines)

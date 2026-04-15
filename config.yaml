@@ -88,6 +88,10 @@ database:
   path: "~/.sfshows/sfshows.db"
 
 notification:
-  max_shows_per_digest: 5     # Randomly sample N shows per digest
-  all_shows_url: ""           # Google Sheets URL — fill in once configured
+  max_shows_per_digest: 8    # Randomly sample N shows per digest
+  all_shows_url: ""           # Auto-populated at runtime from Google Sheets
   include_ticket_url: false
+
+google_sheets:
+  credentials_path: "~/.sfshows/service_account.json"
+  spreadsheet_id: "19D2-wA9gHfSAsLMu97YNHXOvgKq8siNTB8ob9TsweNI"
