@@ -34,21 +34,18 @@ def format_digest(
 
     lines: list[str] = []
 
-    # Header
+    # Header box
     if date_from and date_to:
         from_str = date_from.strftime("%b %-d")
         if date_to.month == date_from.month:
             to_str = date_to.strftime("%-d")
         else:
             to_str = date_to.strftime("%b %-d")
-        lines.append(f"SF Shows — {from_str}–{to_str}")
+        title = f"SF Shows — {from_str}–{to_str}"
     else:
-        lines.append("SF Shows — Upcoming")
+        title = "SF Shows — Upcoming"
 
-    count_line = f"{len(shows)} new show{'s' if len(shows) != 1 else ''}"
-    if total_pending > len(shows):
-        count_line += f" (showing {len(shows)} of {total_pending})"
-    lines.append(count_line)
+    lines.append(f"🪩 {title} 🪩")
 
     # Group by venue
     by_venue: dict[str, list[ShowRecord]] = defaultdict(list)
@@ -70,7 +67,7 @@ def format_digest(
                 else:
                     time_raw = dt.strftime("%-I:%M %p")
                     time_str = time_raw.replace(":00", "").replace(" AM", "am").replace(" PM", "pm")
-                    show_line = f"• {show.artist_name} — {date_str}, {time_str}"
+                    show_line = f"• {show.artist_name} — {date_str} @ {time_str}"
             except ValueError:
                 show_line = f"• {show.artist_name}"
             lines.append(show_line)
