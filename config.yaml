@@ -1,13 +1,6 @@
 imessage:
-  # Phone numbers (+1XXXXXXXXXX) or Apple IDs (email) to message individually.
-  # Add more entries to send to multiple people. For a named group chat,
-  # replace this with: group_name: "Your Group Chat Name"
-  recipients:
-    - "+12103940803"
-    # - "+15559876543"
+  group_name: "SF Shows"
 
-schedule:
-  days_ahead: 14
 
 genres:
   - label: "Indie/Alternative"

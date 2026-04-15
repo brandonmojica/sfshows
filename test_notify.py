@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Send a test iMessage digest using 5 randomly sampled shows from the last scraped day.
+Send a test iMessage digest matching the real run.py format exactly.
 Shows are NOT marked as notified — safe to rerun.
 """
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sfshows.config import load_config
 from sfshows.db import Database
@@ -18,25 +18,30 @@ def main():
     db = Database(cfg.db_path)
     db.init_schema()
 
-    shows = db.get_shows_from_latest_scrape_date()
-    if not shows:
-        print("No shows found in the database.")
+    # Use same pool as real run: all unnotified shows
+    pending = db.get_pending_shows()
+    if not pending:
+        print("No pending shows found in the database.")
         return
 
-    scrape_date = shows[0].created_at[:10]
-    print(f"Last scrape date: {scrape_date}  ({len(shows)} shows available)")
+    print(f"Pending shows: {len(pending)}")
 
-    sample = random.sample(shows, min(8, len(shows)))
+    # Same sampling/sorting logic as run.py
+    if len(pending) > cfg.max_shows_per_digest:
+        sample = random.sample(pending, cfg.max_shows_per_digest)
+        sample.sort(key=lambda s: s.event_datetime)
+    else:
+        sample = sorted(pending, key=lambda s: s.artist_name.lower())
 
-    # Date range for digest header — use full pool, not just the sample
+    # Date range from actual min/max of unnotified shows
     datetimes = []
-    for s in shows:
+    for s in pending:
         try:
             datetimes.append(datetime.fromisoformat(s.event_datetime))
         except ValueError:
             pass
-    date_from = min(datetimes).date() if datetimes else None
-    date_to = max(datetimes).date() if datetimes else None
+    date_from = min(datetimes) if datetimes else datetime.now()
+    date_to = max(datetimes) if datetimes else date_from
 
     all_shows_url = cfg.all_shows_url
     if cfg.sheets_credentials_path and cfg.sheets_spreadsheet_id:
@@ -48,7 +53,7 @@ def main():
         include_ticket_url=cfg.include_ticket_url,
         date_from=date_from,
         date_to=date_to,
-        total_pending=len(shows),
+        total_pending=len(pending),
         all_shows_url=all_shows_url,
     )
 
@@ -56,9 +61,7 @@ def main():
     print(digest)
     print("----------------------\n")
 
-    recipients = cfg.recipients
-    group_name = cfg.group_name
-    send_imessage(digest, recipients=recipients, group_name=group_name)
+    send_imessage(digest, recipients=cfg.recipients, group_name=cfg.group_name)
     print("Test message sent.")
 
 

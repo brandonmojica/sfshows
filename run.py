@@ -232,8 +232,14 @@ async def main() -> None:
                 _print_summary(scraped_count, new_count, notified_count, new_shows, time.monotonic() - start_time)
                 return
 
-            date_from_dt = datetime.now()
-            date_to_dt = date_from_dt + timedelta(days=cfg.days_ahead)
+            datetimes = []
+            for s in pending:
+                try:
+                    datetimes.append(datetime.fromisoformat(s.event_datetime))
+                except ValueError:
+                    pass
+            date_from_dt = min(datetimes) if datetimes else datetime.now()
+            date_to_dt = max(datetimes) if datetimes else date_from_dt
 
             # pending is already sorted by created_at DESC (newest scrape first)
             if len(pending) > cfg.max_shows_per_digest:

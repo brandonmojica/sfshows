@@ -19,9 +19,6 @@ class Config:
     recipients: tuple[str, ...]   # individual phone numbers / Apple IDs
     group_name: Optional[str]     # named group chat (mutually exclusive with recipients)
 
-    # Schedule
-    days_ahead: int
-
     # Genre rules (ordered — first match wins)
     genres: tuple[GenreRule, ...]
 
@@ -94,7 +91,6 @@ def load_config(path: str = "config.yaml") -> Config:
     return Config(
         recipients=recipients,
         group_name=group_name,
-        days_ahead=int(raw["schedule"]["days_ahead"]),
         genres=genres,
         sources=sources,
         venues=tuple(raw["scraper"]["venues"]),
