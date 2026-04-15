@@ -55,6 +55,12 @@ def parse_args() -> argparse.Namespace:
         help="Save the raw rendered HTML from the scraper to FILE (for debugging selectors)",
     )
     parser.add_argument(
+        "--limit",
+        metavar="N",
+        type=int,
+        help="Only scrape the first N venues (useful for quick debugging)",
+    )
+    parser.add_argument(
         "--csv",
         metavar="FILE",
         help="Export all shows from the DB to a CSV file. Skips scraping unless combined with another mode flag.",
@@ -80,7 +86,7 @@ def export_csv(shows: list[dict], path: str) -> None:
     console.print(f"  [dim]Exported[/] [bold]{len(shows)}[/] [dim]shows to[/] [cyan]{path}[/]")
 
 
-async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list, list]:
+async def run_scrape(cfg, db, save_html: str = None, limit: int = None) -> tuple[int, int, list, list]:
     """Scrape, enrich genres, and upsert shows. Returns (scraped_count, new_count, scraped_shows, new_shows)."""
     scraper_registry: dict[str, BaseScraper] = {
         "bandsintown": BandsintownScraper(cfg),
@@ -92,7 +98,7 @@ async def run_scrape(cfg, db, save_html: str = None) -> tuple[int, int, list, li
         if scraper is None:
             console.print(f"  [yellow]Unknown source '{source}' in config — skipping[/]")
             continue
-        raw_events.extend(await scraper.scrape(save_html=save_html))
+        raw_events.extend(await scraper.scrape(save_html=save_html, limit=limit))
 
     enricher = MusicBrainzEnricher(cfg, db)
 
@@ -192,7 +198,7 @@ async def main() -> None:
         scraped_shows = []
         if not args.notify_only and not csv_only:
             scraped_count, new_count, scraped_shows, new_shows = await run_scrape(
-                cfg, db, save_html=args.save_html
+                cfg, db, save_html=args.save_html, limit=args.limit
             )
             console.print(
                 f"  [dim]Scraped[/] [bold]{scraped_count}[/] [dim]events,[/] "

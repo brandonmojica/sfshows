@@ -17,5 +17,5 @@ class RawEvent:
 
 class BaseScraper(ABC):
     @abstractmethod
-    async def scrape(self, save_html: Optional[str] = None) -> list[RawEvent]:
+    async def scrape(self, save_html: Optional[str] = None, limit: Optional[int] = None) -> list[RawEvent]:
         """Return all upcoming events from the source."""

@@ -133,31 +133,39 @@ class Database:
     # ------------------------------------------------------------------
 
     def upsert_show(self, show: ShowRecord) -> bool:
-        """Insert show. Returns True if it was new (not a duplicate)."""
-        try:
-            self._conn.execute(
-                """
-                INSERT INTO shows
-                    (event_id, source, artist_name, venue_name, venue_city,
-                     event_datetime, ticket_url, genre_label)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    show.event_id,
-                    show.source,
-                    show.artist_name,
-                    show.venue_name,
-                    show.venue_city,
-                    show.event_datetime,
-                    show.ticket_url,
-                    show.genre_label,
-                ),
-            )
-            self._conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            # UNIQUE constraint — already exists
-            return False
+        """Insert or update show. Returns True if it was newly inserted."""
+        is_new = self._conn.execute(
+            "SELECT 1 FROM shows WHERE event_id = ? AND source = ?",
+            (show.event_id, show.source),
+        ).fetchone() is None
+        self._conn.execute(
+            """
+            INSERT INTO shows
+                (event_id, source, artist_name, venue_name, venue_city,
+                 event_datetime, ticket_url, genre_label)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(event_id, source) DO UPDATE SET
+                event_datetime = CASE
+                    WHEN excluded.event_datetime NOT LIKE '%T00:00:00'
+                    THEN excluded.event_datetime
+                    ELSE event_datetime
+                END,
+                ticket_url     = excluded.ticket_url,
+                genre_label    = COALESCE(excluded.genre_label, genre_label)
+            """,
+            (
+                show.event_id,
+                show.source,
+                show.artist_name,
+                show.venue_name,
+                show.venue_city,
+                show.event_datetime,
+                show.ticket_url,
+                show.genre_label,
+            ),
+        )
+        self._conn.commit()
+        return is_new
 
     def mark_notified(self, event_ids: list[str]) -> None:
         """Mark the given event IDs as notified so they are excluded from future digests."""
@@ -199,6 +207,38 @@ class Database:
             ORDER BY created_at DESC
             """,
             (source,),
+        ).fetchall()
+        return [
+            ShowRecord(
+                event_id=r["event_id"],
+                source=r["source"],
+                artist_name=r["artist_name"],
+                venue_name=r["venue_name"],
+                venue_city=r["venue_city"],
+                event_datetime=r["event_datetime"],
+                ticket_url=r["ticket_url"],
+                genre_label=r["genre_label"],
+                created_at=r["created_at"] or "",
+            )
+            for r in rows
+        ]
+
+    def get_shows_from_latest_scrape_date(self) -> list[ShowRecord]:
+        """Return all shows whose created_at date matches the most recent scrape date in the DB."""
+        row = self._conn.execute(
+            "SELECT date(MAX(created_at)) FROM shows"
+        ).fetchone()
+        if not row or not row[0]:
+            return []
+        latest_date = row[0]
+        rows = self._conn.execute(
+            """
+            SELECT event_id, source, artist_name, venue_name, venue_city,
+                   event_datetime, ticket_url, genre_label, created_at
+            FROM shows
+            WHERE date(created_at) = ?
+            """,
+            (latest_date,),
         ).fetchall()
         return [
             ShowRecord(

@@ -64,10 +64,13 @@ def format_digest(
         for show in venue_shows:
             try:
                 dt = datetime.fromisoformat(show.event_datetime)
-                time_raw = dt.strftime("%-I:%M %p")
-                time_str = time_raw.replace(":00", "").replace(" AM", "am").replace(" PM", "pm")
                 date_str = dt.strftime("%a %b %-d")
-                show_line = f"• {show.artist_name} — {date_str}, {time_str}"
+                if dt.hour == 0 and dt.minute == 0:
+                    show_line = f"• {show.artist_name} — {date_str}"
+                else:
+                    time_raw = dt.strftime("%-I:%M %p")
+                    time_str = time_raw.replace(":00", "").replace(" AM", "am").replace(" PM", "pm")
+                    show_line = f"• {show.artist_name} — {date_str}, {time_str}"
             except ValueError:
                 show_line = f"• {show.artist_name}"
             lines.append(show_line)

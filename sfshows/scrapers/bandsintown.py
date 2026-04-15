@@ -148,12 +148,17 @@ class BandsintownScraper(BaseScraper):
     async def scrape(
         self,
         save_html: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[RawEvent]:
         """Scrape all configured Bandsintown venue pages concurrently and return raw events.
 
         If save_html is provided, the rendered HTML of the last scraped page is
         written to that path (useful for debugging CSS selectors).
         """
+        venues = list(self._config.venues)
+        if limit is not None:
+            venues = venues[:limit]
+
         concurrency = self._config.venue_concurrency
         semaphore = asyncio.Semaphore(concurrency)
 
@@ -198,7 +203,7 @@ class BandsintownScraper(BaseScraper):
 
                 return _parse_events(html, venue_url)
 
-            coros = [scrape_one(url) for url in self._config.venues]
+            coros = [scrape_one(url) for url in venues]
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -225,6 +230,6 @@ class BandsintownScraper(BaseScraper):
 
         console.print(
             f"  [dim]Scraped[/] [bold]{len(all_events)}[/] [dim]events across[/] "
-            f"[bold]{len(self._config.venues)}[/] [dim]venue(s)[/]"
+            f"[bold]{len(venues)}[/] [dim]venue(s)[/]"
         )
         return all_events
