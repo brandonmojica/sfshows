@@ -18,17 +18,16 @@ def format_digest(
     """
     Build a single digest string suitable for iMessage.
 
-    Groups shows by date, sorted ascending. Example:
+    Groups shows by venue, sorted alphabetically. Example:
 
-        SF Shows — Sat Apr 12 – Fri Apr 25
-        14 new shows
+        SF Shows — Apr 14–28
+        5 new shows (showing 5 of 23)
 
-        SAT APR 12
-        • The Strokes @ The Fillmore, 8:00 PM  [Indie/Alternative]
-          tickets: https://...
+        BOTTOM OF THE HILL
+        • Yard Act — Wed Apr 15, 8pm
 
-        SUN APR 13
-        • ODESZA @ Chase Center, 9:00 PM  [Electronic/Dance]
+        THE FILLMORE
+        • The Strokes — Sat Apr 19, 8pm
     """
     if not shows:
         return "No new SF shows found for the upcoming period."
@@ -37,9 +36,12 @@ def format_digest(
 
     # Header
     if date_from and date_to:
-        from_str = date_from.strftime("%a %b %-d")
-        to_str = date_to.strftime("%a %b %-d")
-        lines.append(f"SF Shows — {from_str} – {to_str}")
+        from_str = date_from.strftime("%b %-d")
+        if date_to.month == date_from.month:
+            to_str = date_to.strftime("%-d")
+        else:
+            to_str = date_to.strftime("%b %-d")
+        lines.append(f"SF Shows — {from_str}–{to_str}")
     else:
         lines.append("SF Shows — Upcoming")
 
@@ -48,34 +50,26 @@ def format_digest(
         count_line += f" (showing {len(shows)} of {total_pending})"
     lines.append(count_line)
 
-    # Group by date
-    by_date: dict[str, list[ShowRecord]] = defaultdict(list)
+    # Group by venue
+    by_venue: dict[str, list[ShowRecord]] = defaultdict(list)
     for show in shows:
-        try:
-            dt = datetime.fromisoformat(show.event_datetime)
-            date_key = dt.strftime("%Y-%m-%d")
-        except ValueError:
-            date_key = "Unknown Date"
-        by_date[date_key].append(show)
+        by_venue[show.venue_name].append(show)
 
-    for date_key in sorted(by_date.keys()):
+    for venue in sorted(by_venue.keys()):
         lines.append("")
-        try:
-            dt = datetime.strptime(date_key, "%Y-%m-%d")
-            lines.append(dt.strftime("%a %b %-d").upper())
-        except ValueError:
-            lines.append(date_key.upper())
+        lines.append(venue.upper())
 
-        for show in by_date[date_key]:
+        # Sort shows within each venue by date
+        venue_shows = sorted(by_venue[venue], key=lambda s: s.event_datetime)
+        for show in venue_shows:
             try:
                 dt = datetime.fromisoformat(show.event_datetime)
-                time_str = dt.strftime("%-I:%M %p")
+                time_raw = dt.strftime("%-I:%M %p")
+                time_str = time_raw.replace(":00", "").replace(" AM", "am").replace(" PM", "pm")
+                date_str = dt.strftime("%a %b %-d")
+                show_line = f"• {show.artist_name} — {date_str}, {time_str}"
             except ValueError:
-                time_str = ""
-
-            genre_str = f"  [{show.genre_label}]" if show.genre_label else ""
-            time_part = f", {time_str}" if time_str else ""
-            show_line = f"• {show.artist_name} @ {show.venue_name}{time_part}{genre_str}"
+                show_line = f"• {show.artist_name}"
             lines.append(show_line)
 
             if include_ticket_url and show.ticket_url:

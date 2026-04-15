@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from datetime import date, datetime
 from typing import Optional
@@ -60,11 +61,36 @@ def _parse_date(card) -> Optional[date]:
         return None
 
 
+def _build_jsonld_datetime_map(soup) -> dict[str, str]:
+    """Extract event ID → ISO datetime from JSON-LD MusicEvent blocks on the page."""
+    dt_map: dict[str, str] = {}
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if item.get("@type") != "MusicEvent":
+                continue
+            url = item.get("url", "")
+            start = item.get("startDate", "")
+            if not url or not start:
+                continue
+            event_id = _extract_event_id(url)
+            if event_id:
+                dt_map[event_id] = start
+    return dt_map
+
+
 def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
     """Parse rendered Bandsintown venue HTML and return a deduplicated list of RawEvents."""
     soup = BeautifulSoup(html, "lxml")
     events: list[RawEvent] = []
     seen_ids: set[str] = set()
+
+    # Build event_id → startDate map from JSON-LD structured data (includes time)
+    jsonld_map = _build_jsonld_datetime_map(soup)
 
     # Venue name from page h1 — strip any SVG title text (e.g. "Verified")
     h1 = soup.find("h1")
@@ -88,15 +114,16 @@ def _parse_events(html: str, venue_url: str) -> list[RawEvent]:
         if not artist_name or artist_name in _INVALID_ARTIST_NAMES:
             continue
 
-        # Event card is 2 levels up from the <a> tag
-        card = a.parent.parent
-
-        # Parse date from month/day text in card
-        event_date = _parse_date(card)
-        if event_date:
-            event_datetime_str = datetime.combine(event_date, datetime.min.time()).isoformat(timespec="seconds")
+        # Prefer JSON-LD startDate (includes time); fall back to card date-text parsing
+        if event_id in jsonld_map:
+            event_datetime_str = jsonld_map[event_id]
         else:
-            event_datetime_str = ""
+            card = a.parent.parent
+            event_date = _parse_date(card)
+            event_datetime_str = (
+                datetime.combine(event_date, datetime.min.time()).isoformat(timespec="seconds")
+                if event_date else ""
+            )
 
         events.append(
             RawEvent(

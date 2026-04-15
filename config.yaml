@@ -90,4 +90,4 @@ database:
 notification:
   max_shows_per_digest: 5     # Randomly sample N shows per digest
   all_shows_url: ""           # Google Sheets URL — fill in once configured
-  include_ticket_url: true
+  include_ticket_url: false
